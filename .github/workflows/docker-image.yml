@@ -1,7 +1,8 @@
 name: Docker Image CI/CD
 on:
   push:
-    branches: ["main"]
+    branches: ["main"] # 添加了对 main 分支的推送触发
+    tags: ["v*.*.*"] # 支持标签触发（如 v1.0.0）
   workflow_dispatch: # 添加手动触发
 jobs:
   build-and-push:
@@ -19,10 +20,32 @@ jobs:
 
       - name: 设置小写镜像名称和版本
         run: |
-          LOWER_NAME=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]')
+          # 获取仓库名称并转换为小写，用于 GHCR
+          LOWER_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "LOWER_NAME=$LOWER_NAME" >> $GITHUB_ENV
-          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # 初始化 VERSION 变量
+          VERSION=""
+
+          # 判断触发事件类型来设置版本号
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            # 如果是标签推送，从标签中提取版本号
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # 如果是手动触发，我们可能需要一个默认的版本或者允许用户输入
+            # 暂时使用一个默认值，例如 'manual' 或者 'latest'
+            # 更好的做法是允许手动触发时输入版本号，但这里先用一个固定值
+            VERSION="manual-${{ github.run_number }}" # 使用运行号作为手动触发的版本
+          else
+            # 对于其他非标签推送，例如推送到分支，可以使用 commit SHA 或者分支名
+            # 为了避免 invalid reference format，我们不能直接使用 refs/heads/main
+            # 可以使用分支名，但需要清理掉斜杠
+            BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g') # 替换非法字符为横杠
+            VERSION="${BRANCH_NAME}-${{ github.sha_short }}" # 使用分支名和短SHA
+          fi
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Generated VERSION: $VERSION" # 打印出来方便调试
 
       - name: 登录到 GitHub Container Registry
         uses: docker/login-action@v2
