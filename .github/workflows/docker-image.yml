@@ -1,6 +1,7 @@
 name: Docker Image CI/CD
 on:
   push:
+    branches: ["main"]
     tags: ["v*.*.*"] # 支持标签触发（如 v1.0.0）
   workflow_dispatch: # 添加手动触发
 jobs:
